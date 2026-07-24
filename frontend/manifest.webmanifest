@@ -1,0 +1,17 @@
+{
+  "name": "InkNote AI",
+  "short_name": "InkNote",
+  "description": "A handwritten AI chat and creative sketch notebook.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eef0f5",
+  "theme_color": "#171b24",
+  "icons": [
+    {
+      "src": "/static/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f0e4">
+  <title>InkNote AI</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icons/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Niconne&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/styles.css?v=42">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand-row">
+        <div class="brand-mark">I</div>
+        <div>
+          <h1>InkNote</h1>
+          <p>AI creative notebook</p>
+        </div>
+      </div>
+
+      <button id="newNoteButton" class="primary-button full-width" type="button">
+        <span>＋</span> New note
+      </button>
+
+      <div class="sidebar-label">Your notes</div>
+      <nav id="noteList" class="note-list" aria-label="Notes"></nav>
+
+      <div class="sidebar-footer">
+        <div class="connection-row">
+          <span id="connectionDot" class="status-dot"></span>
+          <span id="connectionText">Checking desktop…</span>
+        </div>
+        <div id="modelSummary" class="model-summary"></div>
+      </div>
+    </aside>
+
+    <main class="notebook-column dual-notebook-column">
+      <header class="note-header">
+        <div class="title-wrap">
+          <input id="noteTitle" class="note-title" value="Untitled note" maxlength="200" aria-label="Note title">
+          <span id="saveStatus" class="save-status">Saved</span>
+        </div>
+        <div class="header-actions">
+          <button id="clearConversationButton" class="ghost-button" type="button">Clear page</button>
+          <button id="deleteNoteButton" class="icon-button danger" type="button" title="Delete note">🗑</button>
+        </div>
+      </header>
+
+      <section id="conversationWorkspace" class="workspace-panel active" aria-label="Unified multimodal notebook">
+        <div class="notebook-body">
+          <section class="notebook-page" aria-label="User and AI canvas split">
+            <div class="conversation-canvas-split">
+              <section class="notebook-canvas-panel user-canvas-panel" aria-label="User canvas">
+                <header class="canvas-panel-header">
+                  <div>
+                    <span class="eyebrow">Your canvas</span>
+                    <h2>Write or draw anything</h2>
+                  </div>
+                  <span class="canvas-panel-caption">One Send. The agent chooses the right tool.</span>
+                </header>
+
+                <div class="toolbar paper-toolbar user-canvas-toolbar" aria-label="Canvas tools">
+                  <button id="handPenButton" class="tool-button labeled-tool active" type="button" aria-pressed="true">
+                    <span aria-hidden="true">✎</span><span>Pen</span>
+                  </button>
+                  <button id="handEraserButton" class="tool-button labeled-tool" type="button" aria-pressed="false">
+                    <span aria-hidden="true">⌫</span><span>Eraser</span>
+                  </button>
+                  <button id="handUndoButton" class="tool-button" type="button" title="Undo" disabled>↶</button>
+                  <button id="handRedoButton" class="tool-button" type="button" title="Redo" disabled>↷</button>
+                  <button id="handClearButton" class="tool-button" type="button">Clear</button>
+                  <button
+                    id="canvasLayoutButton"
+                    class="tool-button labeled-tool active"
+                    type="button"
+                    aria-pressed="true"
+                    aria-label="Turn notebook lines off"
+                  >
+                    <span aria-hidden="true">☰</span><span id="canvasLayoutLabel">Lines on</span>
+                  </button>
+
+                  <div id="handColorPalette" class="color-palette" aria-label="Pen colors">
+                    <button class="color-swatch active" type="button" data-color="#242938" style="--swatch-color:#242938" aria-label="Charcoal"></button>
+                    <button class="color-swatch" type="button" data-color="#2563eb" style="--swatch-color:#2563eb" aria-label="Blue"></button>
+                    <button class="color-swatch" type="button" data-color="#dc2626" style="--swatch-color:#dc2626" aria-label="Red"></button>
+                    <button class="color-swatch" type="button" data-color="#15803d" style="--swatch-color:#15803d" aria-label="Green"></button>
+                    <button class="color-swatch" type="button" data-color="#7c3aed" style="--swatch-color:#7c3aed" aria-label="Purple"></button>
+                    <button class="color-swatch" type="button" data-color="#ea580c" style="--swatch-color:#ea580c" aria-label="Orange"></button>
+                    <div id="customColorControl" class="custom-color-control">
+                      <button
+                        id="customColorSwatch"
+                        class="custom-color-swatch"
+                        type="button"
+                        aria-label="Choose a custom pen color"
+                        aria-expanded="false"
+                        aria-controls="customColorPopover"
+                      >
+                        <span aria-hidden="true">＋</span>
+                      </button>
+                      <div
+                        id="customColorPopover"
+                        class="custom-color-popover hidden"
+                        role="dialog"
+                        aria-label="Custom pen color"
+                      >
+                        <div
+                          id="customColorSvField"
+                          class="custom-color-sv-field"
+                          role="slider"
+                          tabindex="0"
+                          aria-label="Saturation and value"
+                          aria-valuemin="0"
+                          aria-valuemax="100"
+                        >
+                          <span id="customColorCursor" class="custom-color-cursor"></span>
+                        </div>
+                        <label class="custom-color-hue-row">
+                          <span>Hue</span>
+                          <input id="customColorHue" type="range" min="0" max="360" value="230" aria-label="Hue">
+                        </label>
+                        <div class="custom-color-readout">
+                          <span id="customColorPreview" class="custom-color-preview" aria-hidden="true"></span>
+                          <output id="customColorValue">#242938</output>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <label class="inference-quality-control" for="inferenceStepsSelect">
+                    <span>Quality</span>
+                    <select id="inferenceStepsSelect" aria-label="Image generation quality">
+                      <option value="10" selected>Low</option>
+                      <option value="25">Medium</option>
+                      <option value="50">High</option>
+                    </select>
+                  </label>
+
+                  <button id="sendCanvasButton" class="primary-button compact-action send-canvas-button" type="button">Send</button>
+                </div>
+
+                <p id="canvasHint" class="paper-hint split-canvas-hint">
+                  Ask a question, draw a sketch, or combine both. Qwen routes the request automatically.
+                </p>
+
+                <div class="user-canvas-scroll" aria-label="Scrollable extended notebook page">
+                  <div id="handwritingCanvasWrap" class="canvas-wrap notebook-ink-surface">
+                    <canvas id="handwritingCanvas" data-active-tool="pen" aria-label="Write or draw here"></canvas>
+                    <div class="canvas-placeholder notebook-placeholder">Write, sketch, label, or diagram here</div>
+                  </div>
+                </div>
+                <div id="processingOverlay" class="recognition-overlay hidden">
+                  <span class="spinner"></span>
+                  <span id="processingText">Understanding canvas…</span>
+                </div>
+              </section>
+
+              <section id="aiCanvasPane" class="notebook-canvas-panel ai-canvas-panel" aria-label="AI response canvas">
+                <header class="canvas-panel-header ai-canvas-header">
+                  <div>
+                    <span class="eyebrow">AI canvas</span>
+                    <h2>Text, image, or both</h2>
+                  </div>
+                  <span class="canvas-panel-caption">The latest response appears here.</span>
+                </header>
+
+                <section id="noteFeed" class="note-feed" aria-live="polite">
+                  <div class="empty-state notebook-empty-state">
+                    <p>The agent’s response will appear here.</p>
+                  </div>
+                </section>
+              </section>
+            </div>
+          </section>
+
+          <aside class="conversation-dock" aria-label="Conversation history">
+            <div class="conversation-dock-header">
+              <div>
+                <span class="eyebrow">Reference</span>
+                <h2>Conversation</h2>
+              </div>
+              <span class="conversation-live-dot" title="Conversation is saved"></span>
+            </div>
+            <div id="conversationLog" class="conversation-log" aria-live="polite">
+              <p class="conversation-empty">Canvas requests and AI responses are recorded here.</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast hidden" role="status"></div>
+  <script src="/static/js/app.js?v=42" defer></script>
+</body>
+</html>

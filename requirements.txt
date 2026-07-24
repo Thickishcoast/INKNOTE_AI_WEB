@@ -1,0 +1,14 @@
+fastapi>=0.116
+uvicorn[standard]>=0.35
+ollama>=0.5
+pydantic>=2.11
+python-dotenv>=1.1
+pillow>=11.3
+huggingface-hub>=0.34
+--extra-index-url https://download.pytorch.org/whl/cu130
+torch==2.13.0+cu130
+torchvision==0.28.0+cu130
+diffusers>=0.37
+transformers>=4.55
+accelerate>=1.10
+safetensors>=0.6

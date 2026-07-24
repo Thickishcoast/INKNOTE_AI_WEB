@@ -1,0 +1,21 @@
+### Health
+GET http://127.0.0.1:8000/api/health
+
+### Create note
+POST http://127.0.0.1:8000/api/notes
+Content-Type: application/json
+
+{
+  "title": "API test"
+}
+
+### Submit a unified canvas (replace NOTE_ID and DATA_URL)
+POST http://127.0.0.1:8000/api/canvas/submit
+Content-Type: application/json
+
+{
+  "note_id": "NOTE_ID",
+  "page_data_url": "DATA_URL",
+  "strokes": [],
+  "inference_steps": 10
+}
