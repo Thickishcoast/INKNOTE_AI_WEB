@@ -23,6 +23,7 @@ from backend.config import (
     ROUTER_CONTEXT_SIZE,
 )
 from backend.services.llm import ask_structured_model_async
+from backend.services.routing import normalize_canvas_analysis
 
 
 _DATA_URL = re.compile(r"^data:image/[^;]+;base64,(.+)$", re.DOTALL)
@@ -217,32 +218,7 @@ text-free. For clarify, provide one brief clarification_question. Return JSON on
         think=False,
     )
 
-    action = str(data["action"]).strip().lower()
-    confidence = float(data["confidence"])
-    text_response = str(data["text_response"]).strip()
-    image_prompt = str(data["image_prompt"]).strip()
-    clarification_question = str(data["clarification_question"]).strip()
-
-    if confidence < ROUTER_CONFIDENCE_THRESHOLD:
-        action = "clarify"
-    if action in {"image", "both"} and not image_prompt:
-        action = "clarify"
-    if action == "chat" and not text_response:
-        data["requires_deep_thinking"] = True
-    if action == "clarify" and not clarification_question:
-        clarification_question = "Should I answer your canvas as a question, generate an image, or do both?"
-
-    return {
-        "action": action,
-        "confidence": confidence,
-        "requires_deep_thinking": bool(data["requires_deep_thinking"]),
-        "recognized_text": [item.strip() for item in data["recognized_text"] if item.strip()],
-        "display_text": str(data["display_text"]).strip() or "Canvas submission",
-        "conversation_message": str(data["conversation_message"]).strip(),
-        "text_response": text_response,
-        "image_prompt": image_prompt,
-        "clarification_question": clarification_question,
-    }
+    return normalize_canvas_analysis(data, ROUTER_CONFIDENCE_THRESHOLD)
 
 
 def generate_canvas_image(

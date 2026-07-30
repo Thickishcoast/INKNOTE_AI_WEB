@@ -14,7 +14,7 @@ async def ask_structured_model_async(
     options: dict[str, Any] | None = None,
     think: bool = True,
 ) -> dict[str, Any]:
-    """Async version used by the background memory worker."""
+    """Return validated structured output for routing and memory extraction."""
     required_fields = set(schema.get("required", []))
     client = ollama.AsyncClient()
 
@@ -41,9 +41,7 @@ async def ask_structured_model_async(
         if required_fields.issubset(fields):
             return data
 
-    raise RuntimeError(
-        "Qwen did not return valid structured JSON for background memory extraction."
-    )
+    raise RuntimeError("Qwen did not return valid structured JSON.")
 
 
 def ask_model(
