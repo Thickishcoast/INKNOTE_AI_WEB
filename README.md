@@ -11,6 +11,40 @@ Qwen3.5 routes each canvas submission to one of four internal actions:
 - `both` — return text and a generated image
 - `clarify` — ask a question when the intent is uncertain
 
+## Architecture
+
+```mermaid
+flowchart LR
+    Browser["Browser<br/>user canvas + AI canvas"]
+    API["FastAPI<br/>HTTP API"]
+    Agent["Canvas agent<br/>request coordination"]
+    Router["Qwen router<br/>vision + structured action"]
+    Chat["Qwen chat<br/>optional deep response"]
+    Flux["FLUX<br/>image generation"]
+    Chroma[("ChromaDB<br/>conversation + semantic memory")]
+    SQLite[("SQLite<br/>notes + visible blocks")]
+
+    Browser -->|"canvas submission"| API
+    API --> Agent
+    Agent -->|"history + relevant memory"| Chroma
+    Agent --> Router
+    Router -->|"chat"| Chat
+    Router -->|"image"| Flux
+    Router -->|"both: text"| Chat
+    Router -->|"both: image"| Flux
+    Chat --> Agent
+    Flux --> Agent
+    Agent -->|"save history / queue memory"| Chroma
+    API -->|"note CRUD"| SQLite
+    Agent --> API
+    API -->|"text and/or image URL"| Browser
+```
+
+The router produces one validated structured result containing the action,
+confidence, recognized text, a simple chat response, and an optional FLUX prompt.
+Simple chat uses that response directly; complex chat runs a second thinking-enabled
+Qwen call. FLUX receives only a cleaned visual prompt, never the notebook pixels.
+
 ## Requirements
 
 - Windows
@@ -149,12 +183,16 @@ backend/
   storage/      SQLite notes and persistent ChromaDB history/vector storage
   app.py        FastAPI application and routes
   config.py     Environment and project paths
+  schemas.py    Pydantic request models
 frontend/
   css/          Stylesheets
   js/           Browser application
   icons/        PWA assets
   index.html
 run_windows.bat Windows development launcher
+requirements-test.txt
+tests/          Non-model unit tests
+.github/        GitHub Actions workflow
 docs/           Architecture, learning, and API guides
 data/           SQLite, ChromaDB, and generated images
 ```
@@ -183,3 +221,81 @@ repeated Qwen reloads between chat requests.
 - Deleting a note removes its SQLite row and its ChromaDB conversation record.
 
 The Chroma directory is local runtime data and is excluded by `.gitignore`.
+
+## Design decisions
+
+- **One router call for intent and simple answers:** Qwen returns both the route and
+  the simple text response, avoiding a second inference for common chat requests.
+- **Deep thinking only when requested by the router:** complex reasoning receives a
+  32K thinking-enabled pass while ordinary requests stay on the faster route.
+- **Separate UI and model persistence:** SQLite stores note titles and visible blocks;
+  ChromaDB stores model conversation context and semantic-memory vectors.
+- **Ollama-owned embeddings:** vectors come from `qwen3-embedding:0.6b` and are passed
+  directly to ChromaDB. A model-specific collection prevents mixed vector dimensions.
+- **Asynchronous memory extraction:** responses do not wait for durable-fact
+  extraction. An `asyncio.Queue` batches messages for the background worker.
+- **Text-only FLUX boundary:** Qwen converts notebook content into a positive visual
+  prompt. Keeping raw notebook pixels out of FLUX reduces copied prompt text.
+- **Explicit GPU handoff:** Qwen is unloaded before FLUX claims GPU memory, and FLUX
+  can be released after each generation.
+- **Selective asynchronous execution:** routing and memory model calls are awaited;
+  deep chat, local Chroma operations, and FLUX inference are currently synchronous.
+
+## Failure cases
+
+| Failure | Current behavior | Recovery |
+| --- | --- | --- |
+| Ollama is unavailable or a model is missing | The model call fails and the browser displays an error. | Start Ollama and pull the exact model configured in `.env`. |
+| Qwen returns empty or malformed structured output | The structured helper retries once, then raises an error. | Inspect Ollama logs, model availability, and context limits. |
+| Router confidence is below the threshold | The action changes to `clarify`. | Answer the clarification question or provide a more explicit request. |
+| An image route has no usable image prompt | The action changes to `clarify`; FLUX is not called. | Restate the desired subject, composition, or style. |
+| FLUX is disabled | The API returns a clarification-style availability message. | Set the FLUX provider/model configuration and restart the server. |
+| FLUX files are absent from the Hugging Face cache | Local-only pipeline loading fails. | Download the configured repository with `hf download`. |
+| CUDA memory is insufficient | Model loading or inference fails. | Enable CPU offload and release-after-generation, or lower concurrent GPU use. |
+| ChromaDB cannot be opened or written | Conversation or memory persistence fails. | Check permissions and free space for `data/chroma/`; restore that directory from backup if corrupted. |
+| Background memory extraction fails | The completed response remains available, but that batch is not added to durable memory; the error is logged. | Resolve the Ollama/Chroma issue and submit a later message containing the durable fact. |
+| The browser request fails | The pending response becomes an error and the submitted canvas snapshot is restored. | Correct the server/network issue and resend. |
+
+## Evaluation plan
+
+Model and GPU metrics depend on the labeled dataset, model versions, inference
+settings, and hardware. Record those details with every run and separate cold-start
+from warm-model latency. The table defines the required evaluation report; results
+remain pending until the benchmark suite is run.
+
+| Metric | Measurement | Initial acceptance target | Latest result |
+| --- | --- | --- | --- |
+| Routing accuracy | Exact match between Qwen’s `chat`/`image`/`both`/`clarify` action and a human-labeled test set. | ≥ 90% | Not yet benchmarked |
+| Clarification accuracy | Correct clarify decision across ambiguous and unambiguous requests. Report precision and recall. | ≥ 85% F1 | Not yet benchmarked |
+| Memory-retrieval relevance | Human relevance judgments for the top three Chroma results; report Precision@3. | ≥ 0.70 Precision@3 | Not yet benchmarked |
+| Response latency | End-to-end browser-to-response time, reported as p50/p95 for simple chat, deep chat, image, and both. | Establish a hardware baseline; fail on >10% regression using the same setup. | Not yet benchmarked |
+| Image-generation success rate | Requests that return a readable PNG divided by valid image requests, reported separately for Low/Medium/High. | ≥ 95% | Not yet benchmarked |
+| Peak GPU memory | `torch.cuda.max_memory_allocated()` during router/chat and FLUX phases, including cold and warm runs. | Stay below device capacity with at least 1 GB headroom. | Not yet benchmarked |
+
+Use a fixed, version-controlled evaluation set and record:
+
+- commit SHA and date
+- Qwen, embedding, and FLUX model identifiers
+- inference quality and context settings
+- GPU model, VRAM, CUDA, PyTorch, and driver versions
+- sample count, random seed, warm-up policy, and failure count
+
+## Tests
+
+The unit suite covers:
+
+- structured routing normalization and clarification rules
+- Chroma memory relevance filtering without a live database or embedding call
+- Pydantic request validation and unsafe conversation IDs
+- malformed/empty structured model output and retry exhaustion
+
+It does not start Ollama, load FLUX, download models, or require a GPU.
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-test.txt
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
+GitHub Actions runs the same non-model suite on Python 3.14 for pushes, pull requests,
+and manual dispatches using
+[`.github/workflows/non-model-tests.yml`](.github/workflows/non-model-tests.yml).
