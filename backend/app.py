@@ -2,12 +2,11 @@
 import torch  # noqa: F401
 
 from contextlib import asynccontextmanager
-from typing import Any, Literal
+from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
 
 from backend.agents.agent import start_memory_worker, stop_memory_worker
 from backend.agents.canvas_agent import process_canvas_submission
@@ -20,6 +19,7 @@ from backend.config import (
     ROUTER_CONTEXT_SIZE,
     STATIC_DIR,
 )
+from backend.schemas import CanvasSubmitRequest, NoteCreate, NoteUpdate
 from backend.services.image_generation import image_generation_enabled
 from backend.storage.chroma_store import init_chroma_store
 from backend.storage.note_store import (
@@ -48,23 +48,6 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="InkNote AI", version="1.5.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/generated", StaticFiles(directory=GENERATED_DIR), name="generated")
-
-
-class NoteCreate(BaseModel):
-    title: str = Field(default="Untitled note", max_length=200)
-
-
-class NoteUpdate(BaseModel):
-    title: str = Field(max_length=200)
-    blocks: list[dict[str, Any]]
-
-
-class CanvasSubmitRequest(BaseModel):
-    note_id: str = Field(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_-]+$")
-    page_data_url: str = Field(min_length=20, max_length=15_000_000)
-    strokes: list[dict[str, Any]] = Field(default_factory=list, max_length=20_000)
-    typed_text: str = Field(default="", max_length=8_000)
-    inference_steps: Literal[10, 25, 50] = 10
 
 
 @app.get("/")
