@@ -256,30 +256,6 @@ The Chroma directory is local runtime data and is excluded by `.gitignore`.
 | Background memory extraction fails | The completed response remains available, but that batch is not added to durable memory; the error is logged. | Resolve the Ollama/Chroma issue and submit a later message containing the durable fact. |
 | The browser request fails | The pending response becomes an error and the submitted canvas snapshot is restored. | Correct the server/network issue and resend. |
 
-## Evaluation plan
-
-Model and GPU metrics depend on the labeled dataset, model versions, inference
-settings, and hardware. Record those details with every run and separate cold-start
-from warm-model latency. The table defines the required evaluation report; results
-remain pending until the benchmark suite is run.
-
-| Metric | Measurement | Initial acceptance target | Latest result |
-| --- | --- | --- | --- |
-| Routing accuracy | Exact match between Qwen’s `chat`/`image`/`both`/`clarify` action and a human-labeled test set. | ≥ 90% | Not yet benchmarked |
-| Clarification accuracy | Correct clarify decision across ambiguous and unambiguous requests. Report precision and recall. | ≥ 85% F1 | Not yet benchmarked |
-| Memory-retrieval relevance | Human relevance judgments for the top three Chroma results; report Precision@3. | ≥ 0.70 Precision@3 | Not yet benchmarked |
-| Response latency | End-to-end browser-to-response time, reported as p50/p95 for simple chat, deep chat, image, and both. | Establish a hardware baseline; fail on >10% regression using the same setup. | Not yet benchmarked |
-| Image-generation success rate | Requests that return a readable PNG divided by valid image requests, reported separately for Low/Medium/High. | ≥ 95% | Not yet benchmarked |
-| Peak GPU memory | `torch.cuda.max_memory_allocated()` during router/chat and FLUX phases, including cold and warm runs. | Stay below device capacity with at least 1 GB headroom. | Not yet benchmarked |
-
-Use a fixed, version-controlled evaluation set and record:
-
-- commit SHA and date
-- Qwen, embedding, and FLUX model identifiers
-- inference quality and context settings
-- GPU model, VRAM, CUDA, PyTorch, and driver versions
-- sample count, random seed, warm-up policy, and failure count
-
 ## Tests
 
 The unit suite covers:
