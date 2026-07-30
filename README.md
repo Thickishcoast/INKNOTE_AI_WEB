@@ -19,12 +19,15 @@ Qwen3.5 routes each canvas submission to one of four internal actions:
 - [Ollama](https://ollama.com/) installed and running
 - Enough disk space for the Python environment and all three models
 
+Conversation history and semantic-memory vectors are stored locally with embedded
+ChromaDB. No separate Chroma server is required.
+
 InkNote does **not** download models automatically. Install the exact models
 below before starting the application.
 
 | Provider | Model | Purpose |
 | --- | --- | --- |
-| Ollama | `qwen3.5:4b` | Thinking-enabled canvas understanding, routing, and chat |
+| Ollama | `qwen3.5:4b` | Non-thinking canvas routing and thinking-enabled deep chat |
 | Ollama | `qwen3-embedding:0.6b` | Semantic-memory embeddings |
 | Hugging Face | `black-forest-labs/FLUX.2-klein-4B` | Local image generation |
 
@@ -109,8 +112,8 @@ Never commit a real token or add it to `.env.example`.
 
 Open <http://127.0.0.1:8000>.
 
-The launcher creates `.env` from `.env.example` when needed and starts Uvicorn.
-It does not install, check, or download models.
+The launcher creates `.env` from `.env.example` when needed, launches Ollama in the
+background, and starts Uvicorn. It does not install, check, or download models.
 
 ## Troubleshooting model errors
 
@@ -143,7 +146,7 @@ It does not install, check, or download models.
 backend/
   agents/       Request routing and chat orchestration
   services/     Ollama, FLUX, and semantic-memory services
-  storage/      SQLite notes and JSON conversation history
+  storage/      SQLite notes and persistent ChromaDB history/vector storage
   app.py        FastAPI application and routes
   config.py     Environment and project paths
 frontend/
@@ -152,9 +155,8 @@ frontend/
   icons/        PWA assets
   index.html
 run_windows.bat Windows development launcher
-tests/          Backend smoke tests
 docs/           Architecture, learning, and API guides
-data/           Runtime database, histories, memory, and images
+data/           SQLite, ChromaDB, and generated images
 ```
 
 ## Environment
@@ -167,3 +169,17 @@ configures a 32K-token context for deep chat.
 `INKNOTE_ROUTER_CONTEXT_SIZE=8192` keeps the unified router and memory extraction
 bounded. `INKNOTE_QWEN_KEEP_ALIVE=5m` avoids
 repeated Qwen reloads between chat requests.
+
+## Local storage
+
+- `data/inknote.db` stores note titles and visible frontend blocks.
+- `data/chroma/` is the only active store for Qwen conversation history and
+  semantic-memory embeddings.
+- Conversation history is stored in the `inknote_conversations` collection.
+- Durable memory uses an `inknote_memories_*` collection associated with the
+  configured embedding model.
+- Semantic vectors are created by the configured Ollama embedding model and supplied
+  directly to ChromaDB; Chroma does not download a separate embedding model.
+- Deleting a note removes its SQLite row and its ChromaDB conversation record.
+
+The Chroma directory is local runtime data and is excluded by `.gitignore`.

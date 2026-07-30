@@ -8,6 +8,7 @@ htmlcov/
 *.log
 .env
 data/inknote.db
+data/chroma/**
 data/conversations/*.json
 data/memory/*.json
 data/generated/**

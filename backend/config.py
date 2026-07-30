@@ -8,8 +8,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(PROJECT_ROOT / ".env")
 
 DATA_DIR = PROJECT_ROOT / "data"
-CONVERSATION_DIR = DATA_DIR / "conversations"
-MEMORY_FILE = DATA_DIR / "memory" / "knowledge.json"
+CHROMA_DIR = DATA_DIR / "chroma"
 DATABASE_FILE = DATA_DIR / "inknote.db"
 GENERATED_DIR = DATA_DIR / "generated"
 STATIC_DIR = PROJECT_ROOT / "frontend"

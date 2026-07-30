@@ -3,6 +3,7 @@ uvicorn[standard]>=0.35
 ollama>=0.5
 pydantic>=2.11
 python-dotenv>=1.1
+chromadb>=1.5.9,<2
 pillow>=11.3
 huggingface-hub>=0.34
 --extra-index-url https://download.pytorch.org/whl/cu130

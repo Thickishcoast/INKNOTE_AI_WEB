@@ -21,6 +21,7 @@ from backend.config import (
     STATIC_DIR,
 )
 from backend.services.image_generation import image_generation_enabled
+from backend.storage.chroma_store import init_chroma_store
 from backend.storage.note_store import (
     create_note,
     delete_note,
@@ -35,6 +36,7 @@ from backend.storage.store_history import delete_conversation
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_database()
+    init_chroma_store()
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
     start_memory_worker()
     try:
