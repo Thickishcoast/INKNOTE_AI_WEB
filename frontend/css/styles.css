@@ -1225,3 +1225,129 @@ body {
     width: 100%;
   }
 }
+
+/* v43: typed canvas input, keyboard focus, and collapsible reference history */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.keyboard-prompt {
+  display: block;
+  flex: 0 0 auto;
+  margin: 2px 0 6px;
+}
+
+.keyboard-prompt textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 52px;
+  max-height: 150px;
+  resize: vertical;
+  border: 1px solid rgba(171, 162, 140, 0.62);
+  border-radius: 10px;
+  outline: 0;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--ink);
+  font: 14px/1.45 Inter, system-ui, sans-serif;
+}
+
+.keyboard-prompt textarea::placeholder {
+  color: rgba(88, 82, 68, 0.48);
+}
+
+.keyboard-prompt textarea:focus {
+  border-color: #8e84ef;
+  box-shadow: 0 0 0 3px rgba(114, 99, 230, 0.13);
+}
+
+.keyboard-prompt textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.keyboard-hint {
+  flex: 0 0 auto;
+  margin: -2px 0 6px;
+  color: rgba(88, 82, 68, 0.5);
+  font-size: 9px;
+}
+
+#handwritingCanvas:focus-visible {
+  outline: 3px solid rgba(114, 99, 230, 0.42);
+  outline-offset: -3px;
+}
+
+.conversation-dock-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.conversation-collapse-button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid #ddd9ce;
+  border-radius: 9px;
+  background: #fff;
+  color: #535868;
+  cursor: pointer;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.conversation-collapse-button:hover {
+  border-color: #bdb6ee;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.conversation-collapse-button:focus-visible {
+  outline: 3px solid rgba(114, 99, 230, 0.4);
+  outline-offset: 2px;
+}
+
+.conversation-dock.collapsed .conversation-dock-header {
+  height: 100%;
+  justify-content: center;
+  padding: 9px;
+  border-bottom: 0;
+}
+
+.conversation-dock.collapsed .conversation-dock-header > div:first-child,
+.conversation-dock.collapsed .conversation-live-dot,
+.conversation-dock.collapsed .conversation-log {
+  display: none;
+}
+
+.conversation-dock.collapsed .conversation-dock-actions {
+  display: flex;
+}
+
+@media (min-width: 851px) {
+  #conversationWorkspace .notebook-body.reference-collapsed {
+    grid-template-columns: minmax(0, 1fr) 52px;
+  }
+
+  .conversation-dock.collapsed {
+    width: 52px;
+  }
+}
+
+@media (max-width: 850px) {
+  .conversation-dock.collapsed {
+    width: min(100%, 700px);
+    height: 52px;
+  }
+}

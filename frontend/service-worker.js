@@ -1,8 +1,8 @@
-const CACHE = "inknote-shell-v42-restructured";
+const CACHE = "inknote-shell-v46-simple";
 const SHELL = [
   "/",
-  "/static/css/styles.css?v=42",
-  "/static/js/app.js?v=42",
+  "/static/css/styles.css?v=43",
+  "/static/js/app.js?v=46",
   "/static/icons/icon.svg",
   "/manifest.webmanifest"
 ];

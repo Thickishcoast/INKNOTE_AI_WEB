@@ -4,7 +4,7 @@ InkNote provides a shared user canvas and AI canvas. A user can write, sketch,
 label a diagram, or combine all three, then submit the page with one **Send**
 button.
 
-Qwen2.5-VL routes each canvas submission to one of four internal actions:
+Qwen3.5 routes each canvas submission to one of four internal actions:
 
 - `chat` — answer or analyze the canvas in text
 - `image` — send a refined, text-free visual prompt to FLUX
@@ -24,7 +24,7 @@ below before starting the application.
 
 | Provider | Model | Purpose |
 | --- | --- | --- |
-| Ollama | `qwen2.5vl:3b` | Canvas understanding, routing, and chat |
+| Ollama | `qwen3.5:4b` | Thinking-enabled canvas understanding, routing, and chat |
 | Ollama | `qwen3-embedding:0.6b` | Semantic-memory embeddings |
 | Hugging Face | `black-forest-labs/FLUX.2-klein-4B` | Local image generation |
 
@@ -50,16 +50,15 @@ If PowerShell blocks activation, run the executables through their full
 Start the Ollama application, then run:
 
 ```powershell
-ollama pull qwen2.5vl:3b
+ollama pull qwen3.5:4b
 ollama pull qwen3-embedding:0.6b
 ollama list
 ```
 
 Confirm that both exact model names appear in `ollama list`.
 
-If you change `INKNOTE_CHAT_MODEL`, `INKNOTE_MULTIMODAL_MODEL`, or
-`INKNOTE_EMBEDDING_MODEL` in `.env`, manually pull those replacement model
-names as well.
+If you change `INKNOTE_QWEN_MODEL` or `INKNOTE_EMBEDDING_MODEL` in `.env`,
+manually pull the replacement model names as well.
 
 ### 3. Download the FLUX model manually
 
@@ -130,9 +129,14 @@ It does not install, check, or download models.
 
 ## Model sequence
 
-Qwen and FLUX run sequentially. Qwen uses `keep_alive=0`, and FLUX is released
-after image generation by default. This reduces the chance of both models
-competing for GPU memory.
+Qwen remains warm for five minutes by default so consecutive chat requests avoid
+model reload time. Before an image action, InkNote explicitly unloads Qwen and then
+loads FLUX. FLUX is released after generation by default, preventing the two models
+from competing for GPU memory.
+
+This simplified school-project version does not use Python threads or locks. Run one
+AI canvas request at a time. Semantic-memory work is added to one `asyncio.Queue`;
+the browser receives its response before the async worker extracts and saves memories.
 
 ## Canvas tools
 
@@ -168,4 +172,8 @@ data/           Runtime database, histories, memory, and images
 Configuration defaults are documented in `.env.example`. Keep
 `INKNOTE_IMAGE_RELEASE_AFTER_GENERATION=true` when Qwen and FLUX share a GPU.
 The model names in `.env` must exactly match the Ollama tags and Hugging Face
-repository that you installed manually.
+repository that you installed manually. `INKNOTE_MODEL_CONTEXT_SIZE=32768`
+configures a 32K-token context for deep chat.
+`INKNOTE_ROUTER_CONTEXT_SIZE=8192` keeps the unified router and memory extraction
+bounded. `INKNOTE_QWEN_KEEP_ALIVE=5m` avoids
+repeated Qwen reloads between chat requests.

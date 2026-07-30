@@ -1,22 +1,16 @@
-from __future__ import annotations
-
 import json
 import math
-import threading
 
 import ollama
 
-from backend.config import CHAT_MODEL, EMBEDDING_MODEL, MEMORY_FILE
-
-
-_MEMORY_LOCK = threading.Lock()
+from backend.config import EMBEDDING_MODEL, MEMORY_FILE, ROUTER_CONTEXT_SIZE
+from backend.services.llm import ask_structured_model_async
 
 
 def load_memories() -> list[dict]:
     if not MEMORY_FILE.exists():
         return []
-    data = json.loads(MEMORY_FILE.read_text(encoding="utf-8"))
-    return data if isinstance(data, list) else []
+    return json.loads(MEMORY_FILE.read_text(encoding="utf-8"))
 
 
 def save_memories(memories: list[dict]) -> None:
@@ -44,33 +38,8 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     return dot / (magnitude_a * magnitude_b) if magnitude_a and magnitude_b else 0.0
 
 
-def add_memory(text: str) -> None:
-    text = text.strip()
-    if not text:
-        return
-
-    with _MEMORY_LOCK:
-        memories = [
-            item
-            for item in load_memories()
-            if item.get("embedding_model") == EMBEDDING_MODEL
-        ]
-        if any(item.get("text", "").lower() == text.lower() for item in memories):
-            return
-        memories.append(
-            {
-                "text": text,
-                "embedding": create_embedding(text),
-                "embedding_model": EMBEDDING_MODEL,
-            }
-        )
-        save_memories(memories)
-
-
 def search_memories(query: str, top_k: int = 3, minimum_score: float = 0.35) -> list[str]:
-    with _MEMORY_LOCK:
-        memories = load_memories()
-
+    memories = load_memories()
     if not memories:
         return []
 
@@ -84,7 +53,7 @@ def search_memories(query: str, top_k: int = 3, minimum_score: float = 0.35) -> 
     return [text for score, text in scored[:top_k] if score >= minimum_score]
 
 
-def extract_memories(user_message: str) -> list[str]:
+async def extract_memories(user_message: str) -> list[str]:
     schema = {
         "type": "object",
         "properties": {
@@ -97,17 +66,48 @@ def extract_memories(user_message: str) -> list[str]:
         "Ignore normal questions and temporary facts. Return each memory as a complete "
         f"third-person sentence. User message: {user_message}"
     )
-    response = ollama.chat(
-        model=CHAT_MODEL,
+    data = await ask_structured_model_async(
         messages=[{"role": "user", "content": prompt}],
-        format=schema,
-        stream=False,
+        schema=schema,
+        options={"temperature": 0, "num_ctx": ROUTER_CONTEXT_SIZE},
         think=False,
-        keep_alive=0,
-        options={"temperature": 0},
     )
     return [
         item.strip()
-        for item in json.loads(response.message.content)["memories"]
+        for item in data["memories"]
         if item.strip()
     ]
+
+
+async def save_new_memories(user_message: str) -> None:
+    """Extract, embed, and save durable memories without blocking the request."""
+    candidates = await extract_memories(user_message)
+    memories = [
+        item
+        for item in load_memories()
+        if item.get("embedding_model") == EMBEDDING_MODEL
+    ]
+    known = {item.get("text", "").lower() for item in memories}
+    new_texts = []
+    for text in candidates:
+        key = text.lower()
+        if key not in known:
+            known.add(key)
+            new_texts.append(text)
+    if not new_texts:
+        return
+
+    response = await ollama.AsyncClient().embed(
+        model=EMBEDDING_MODEL,
+        input=new_texts,
+        keep_alive=0,
+    )
+    for text, embedding in zip(new_texts, response["embeddings"]):
+        memories.append(
+            {
+                "text": text,
+                "embedding": embedding,
+                "embedding_model": EMBEDDING_MODEL,
+            }
+        )
+    save_memories(memories)

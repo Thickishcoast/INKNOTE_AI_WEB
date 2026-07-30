@@ -1,6 +1,4 @@
-from __future__ import annotations
-
-# PyTorch must load its native Windows DLLs before FastAPI starts worker threads.
+# Load PyTorch's native Windows DLLs before FastAPI initializes the server.
 import torch  # noqa: F401
 
 from contextlib import asynccontextmanager
@@ -11,8 +9,17 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from backend.agents.agent import start_memory_worker, stop_memory_worker
 from backend.agents.canvas_agent import process_canvas_submission
-from backend.config import CHAT_MODEL, GENERATED_DIR, IMAGE_MODEL, MULTIMODAL_MODEL, STATIC_DIR
+from backend.config import (
+    GENERATED_DIR,
+    IMAGE_MODEL,
+    MODEL_CONTEXT_SIZE,
+    QWEN_KEEP_ALIVE,
+    QWEN_MODEL,
+    ROUTER_CONTEXT_SIZE,
+    STATIC_DIR,
+)
 from backend.services.image_generation import image_generation_enabled
 from backend.storage.note_store import (
     create_note,
@@ -29,7 +36,11 @@ from backend.storage.store_history import delete_conversation
 async def lifespan(_: FastAPI):
     init_database()
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
-    yield
+    start_memory_worker()
+    try:
+        yield
+    finally:
+        await stop_memory_worker()
 
 
 app = FastAPI(title="InkNote AI", version="1.5.0", lifespan=lifespan)
@@ -50,6 +61,7 @@ class CanvasSubmitRequest(BaseModel):
     note_id: str = Field(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_-]+$")
     page_data_url: str = Field(min_length=20, max_length=15_000_000)
     strokes: list[dict[str, Any]] = Field(default_factory=list, max_length=20_000)
+    typed_text: str = Field(default="", max_length=8_000)
     inference_steps: Literal[10, 25, 50] = 10
 
 
@@ -70,12 +82,15 @@ def service_worker() -> FileResponse:
 
 @app.get("/api/health")
 def health() -> dict[str, Any]:
+    images_enabled = image_generation_enabled()
     return {
         "status": "online",
-        "chat_model": CHAT_MODEL,
-        "multimodal_model": MULTIMODAL_MODEL,
-        "image_generation_enabled": image_generation_enabled(),
-        "image_model": IMAGE_MODEL if image_generation_enabled() else None,
+        "qwen_model": QWEN_MODEL,
+        "model_context_size": MODEL_CONTEXT_SIZE,
+        "router_context_size": ROUTER_CONTEXT_SIZE,
+        "qwen_keep_alive": QWEN_KEEP_ALIVE,
+        "image_generation_enabled": images_enabled,
+        "image_model": IMAGE_MODEL if images_enabled else None,
     }
 
 
@@ -119,5 +134,6 @@ async def canvas_submit(request: CanvasSubmitRequest) -> dict[str, Any]:
         request.note_id,
         request.page_data_url,
         request.strokes,
+        typed_text=request.typed_text,
         inference_steps=request.inference_steps,
     )

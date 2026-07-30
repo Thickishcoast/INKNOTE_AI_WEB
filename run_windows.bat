@@ -8,5 +8,6 @@ if not exist ".venv\Scripts\python.exe" (
 )
 if not exist ".env" copy /Y ".env.example" ".env" >nul
 call .venv\Scripts\activate
+start "Ollama" /B  ollama serve
 python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
 endlocal

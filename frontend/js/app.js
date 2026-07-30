@@ -7,7 +7,11 @@ const elements = {
   noteList: $("#noteList"),
   noteFeed: $("#noteFeed"),
   aiCanvasPane: $("#aiCanvasPane"),
+  notebookBody: $(".notebook-body"),
+  referenceConversation: $("#referenceConversation"),
   conversationLog: $("#conversationLog"),
+  collapseConversationButton: $("#collapseConversationButton"),
+  collapseConversationIcon: $("#collapseConversationIcon"),
   noteTitle: $("#noteTitle"),
   saveStatus: $("#saveStatus"),
   newNoteButton: $("#newNoteButton"),
@@ -21,6 +25,7 @@ const elements = {
   processingOverlay: $("#processingOverlay"),
   processingText: $("#processingText"),
   canvasHint: $("#canvasHint"),
+  keyboardCanvasInput: $("#keyboardCanvasInput"),
   sendCanvasButton: $("#sendCanvasButton"),
   handPenButton: $("#handPenButton"),
   handEraserButton: $("#handEraserButton"),
@@ -58,6 +63,7 @@ const customColor = {
 
 const CANVAS_LINES_STORAGE_KEY = "inknote-canvas-lines";
 const INFERENCE_STEPS_STORAGE_KEY = "inknote-inference-steps";
+const REFERENCE_COLLAPSED_STORAGE_KEY = "inknote-reference-collapsed";
 const ALLOWED_INFERENCE_STEPS = new Set([10, 25, 50]);
 
 function uniqueId(prefix = "block") {
@@ -706,6 +712,7 @@ async function selectNote(noteId) {
   }
   state.note = await apiJson(`/api/notes/${noteId}`);
   handwritingPad.clear();
+  elements.keyboardCanvasInput.value = "";
   elements.noteTitle.value = state.note.title;
   elements.saveStatus.textContent = "Saved";
   renderNoteList();
@@ -733,8 +740,27 @@ function setBusy(busy) {
   elements.handClearButton.disabled = busy;
   elements.canvasLayoutButton.disabled = busy;
   elements.inferenceStepsSelect.disabled = busy;
+  elements.keyboardCanvasInput.disabled = busy;
   elements.handColorPalette.classList.toggle("disabled", busy);
   updateHistoryButtons();
+}
+
+function setReferenceConversationCollapsed(collapsed, { persist = true } = {}) {
+  elements.notebookBody.classList.toggle("reference-collapsed", collapsed);
+  elements.referenceConversation.classList.toggle("collapsed", collapsed);
+  elements.collapseConversationButton.setAttribute("aria-expanded", String(!collapsed));
+  elements.collapseConversationButton.title = collapsed
+    ? "Expand reference conversation"
+    : "Collapse reference conversation";
+  elements.collapseConversationButton.querySelector(".visually-hidden").textContent = collapsed
+    ? "Expand reference conversation"
+    : "Collapse reference conversation";
+  elements.collapseConversationIcon.textContent = collapsed ? "‹" : "›";
+  if (persist) localStorage.setItem(REFERENCE_COLLAPSED_STORAGE_KEY, collapsed ? "yes" : "no");
+}
+
+function loadReferenceConversationCollapsed() {
+  return localStorage.getItem(REFERENCE_COLLAPSED_STORAGE_KEY) === "yes";
 }
 
 function setCanvasLineLayout(enabled, { persist = true } = {}) {
@@ -746,42 +772,22 @@ function setCanvasLineLayout(enabled, { persist = true } = {}) {
     enabled ? "Turn notebook lines off" : "Turn notebook lines on",
   );
   elements.canvasLayoutLabel.textContent = enabled ? "Lines on" : "Lines off";
-  if (persist) {
-    try {
-      localStorage.setItem(CANVAS_LINES_STORAGE_KEY, enabled ? "on" : "off");
-    } catch {
-      // The visual toggle still works when browser storage is unavailable.
-    }
-  }
+  if (persist) localStorage.setItem(CANVAS_LINES_STORAGE_KEY, enabled ? "on" : "off");
 }
 
 function loadCanvasLineLayout() {
-  try {
-    return localStorage.getItem(CANVAS_LINES_STORAGE_KEY) !== "off";
-  } catch {
-    return true;
-  }
+  return localStorage.getItem(CANVAS_LINES_STORAGE_KEY) !== "off";
 }
 
 function setInferenceSteps(value, { persist = true } = {}) {
   const requested = Number(value);
   const steps = ALLOWED_INFERENCE_STEPS.has(requested) ? requested : 10;
   elements.inferenceStepsSelect.value = String(steps);
-  if (persist) {
-    try {
-      localStorage.setItem(INFERENCE_STEPS_STORAGE_KEY, String(steps));
-    } catch {
-      // The selector still works when browser storage is unavailable.
-    }
-  }
+  if (persist) localStorage.setItem(INFERENCE_STEPS_STORAGE_KEY, String(steps));
 }
 
 function loadInferenceSteps() {
-  try {
-    return Number(localStorage.getItem(INFERENCE_STEPS_STORAGE_KEY) || 10);
-  } catch {
-    return 10;
-  }
+  return Number(localStorage.getItem(INFERENCE_STEPS_STORAGE_KEY) || 10);
 }
 
 function qualityLabelForSteps(steps) {
@@ -865,8 +871,9 @@ function selectColor(color, source = null) {
 
 async function submitCanvas() {
   if (state.busy || !state.note) return;
-  if (!handwritingPad.hasInk()) {
-    showToast("Write or draw something before pressing Send.");
+  const typedText = elements.keyboardCanvasInput.value.trim();
+  if (!handwritingPad.hasInk() && !typedText) {
+    showToast("Type, write, or draw something before pressing Send.");
     return;
   }
 
@@ -877,7 +884,7 @@ async function submitCanvas() {
   const inferenceSteps = Number(elements.inferenceStepsSelect.value);
   const userBlock = addBlock("user_canvas", {
     turn_id: turnId,
-    text: "Understanding canvas…",
+    text: typedText || "Understanding canvas…",
     pending: true,
   });
   const pendingBlock = addBlock("assistant_text", {
@@ -904,10 +911,12 @@ async function submitCanvas() {
         note_id: state.note.id,
         page_data_url: pageDataUrl,
         strokes,
+        typed_text: typedText,
         inference_steps: inferenceSteps,
       }),
     });
 
+    elements.keyboardCanvasInput.value = "";
     userBlock.text = result.user_text || "Canvas submission";
     userBlock.intent = result.intent;
     userBlock.pending = false;
@@ -943,7 +952,7 @@ async function submitCanvas() {
       : "";
     elements.canvasHint.textContent = `Agent route: ${result.intent}.${qualityNote} Write or draw the next request.`;
   } catch (error) {
-    userBlock.text = "Canvas submission";
+    userBlock.text = typedText || "Canvas submission";
     userBlock.pending = false;
     pendingBlock.type = "error";
     pendingBlock.text = error.message;
@@ -969,7 +978,10 @@ async function checkHealth() {
     elements.connectionDot.classList.remove("offline");
     elements.connectionText.textContent = "Desktop connected";
     const image = health.image_generation_enabled ? ` · Image: ${health.image_model}` : " · Image: disabled";
-    elements.modelSummary.textContent = `Router: ${health.multimodal_model} · Chat: ${health.chat_model}${image}`;
+    const context = health.model_context_size
+      ? ` · Context: ${Math.round(health.model_context_size / 1024)}K`
+      : "";
+    elements.modelSummary.textContent = `Qwen: ${health.qwen_model}${context}${image}`;
   } catch (error) {
     elements.connectionDot.classList.add("offline");
     elements.connectionDot.classList.remove("online");
@@ -1017,7 +1029,11 @@ function bindUI() {
   elements.handEraserButton.addEventListener("click", () => activateCanvasTool("eraser"));
   elements.handUndoButton.addEventListener("click", () => handwritingPad.undo());
   elements.handRedoButton.addEventListener("click", () => handwritingPad.redo());
-  elements.handClearButton.addEventListener("click", () => handwritingPad.clear());
+  elements.handClearButton.addEventListener("click", () => {
+    handwritingPad.clear();
+    elements.keyboardCanvasInput.value = "";
+    elements.keyboardCanvasInput.focus();
+  });
   elements.canvasLayoutButton.addEventListener("click", () => {
     const enabled = elements.canvasLayoutButton.getAttribute("aria-pressed") !== "true";
     setCanvasLineLayout(enabled);
@@ -1026,6 +1042,10 @@ function bindUI() {
     setInferenceSteps(event.target.value);
   });
   elements.sendCanvasButton.addEventListener("click", submitCanvas);
+  elements.collapseConversationButton.addEventListener("click", () => {
+    const collapsed = elements.collapseConversationButton.getAttribute("aria-expanded") === "true";
+    setReferenceConversationCollapsed(collapsed);
+  });
 
   elements.handColorPalette.addEventListener("click", (event) => {
     if (state.busy) return;
@@ -1085,21 +1105,41 @@ function bindUI() {
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") setCustomColorPopover(false);
-  });
+    if (event.key === "Escape") {
+      setCustomColorPopover(false);
+      return;
+    }
+    if (state.busy) return;
 
-  document.addEventListener("keydown", (event) => {
-    if (state.busy || event.target.matches("input, textarea")) return;
-    if (!(event.ctrlKey || event.metaKey)) return;
-    if (event.key.toLowerCase() === "z" && event.shiftKey) {
+    const modifier = event.ctrlKey || event.metaKey;
+    const editable = event.target?.matches?.(
+      "input, textarea, select, [contenteditable='true']",
+    );
+    const key = event.key.toLowerCase();
+    const plainShortcut = !modifier && !event.altKey;
+
+    if (modifier && event.key === "Enter") {
+      event.preventDefault();
+      submitCanvas();
+    } else if (editable) {
+      return;
+    } else if (modifier && key === "z" && event.shiftKey) {
       event.preventDefault();
       handwritingPad.redo();
-    } else if (event.key.toLowerCase() === "z") {
+    } else if (modifier && key === "z") {
       event.preventDefault();
       handwritingPad.undo();
-    } else if (event.key.toLowerCase() === "y") {
+    } else if (modifier && key === "y") {
       event.preventDefault();
       handwritingPad.redo();
+    } else if (plainShortcut && key === "p") {
+      event.preventDefault();
+      activateCanvasTool("pen");
+      elements.handwritingCanvas.focus();
+    } else if (plainShortcut && key === "e") {
+      event.preventDefault();
+      activateCanvasTool("eraser");
+      elements.handwritingCanvas.focus();
     }
   });
 
@@ -1117,6 +1157,7 @@ function bindUI() {
   applyCustomColor({ select: false });
   setCanvasLineLayout(loadCanvasLineLayout(), { persist: false });
   setInferenceSteps(loadInferenceSteps(), { persist: false });
+  setReferenceConversationCollapsed(loadReferenceConversationCollapsed(), { persist: false });
 }
 
 const handwritingPad = new CanvasPad(elements.handwritingCanvas, elements.handwritingWrap, {

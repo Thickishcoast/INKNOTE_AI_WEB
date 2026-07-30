@@ -1,13 +1,16 @@
-from __future__ import annotations
-
 from typing import Any
 
-from backend.agents.agent import process_user_message, record_exchange
+from backend.agents.agent import (
+    get_reference_context,
+    process_user_message,
+    record_exchange,
+)
 from backend.services.image_generation import (
     analyze_canvas_page,
     generate_canvas_image,
     image_generation_enabled,
 )
+from backend.services.llm import unload_qwen_model
 
 IMAGE_TOOL_CONTEXT = """
 InkNote has a FLUX image-generation tool and this request is being routed to it.
@@ -23,34 +26,61 @@ def process_canvas_submission(
     page_data_url: str,
     strokes: list[dict[str, Any]],
     *,
+    typed_text: str = "",
     inference_steps: int = 10,
 ) -> dict[str, Any]:
-    analysis = analyze_canvas_page(page_data_url, stroke_count=len(strokes))
+    typed_text = typed_text.strip()
+    conversation_history, relevant_memories = get_reference_context(note_id, typed_text)
+    analysis = analyze_canvas_page(
+        page_data_url,
+        stroke_count=len(strokes),
+        typed_text=typed_text,
+        conversation_history=conversation_history,
+        relevant_memories=relevant_memories,
+    )
     action = str(analysis["action"])
-    user_text = str(analysis["display_text"])
+    requires_deep_thinking = bool(analysis["requires_deep_thinking"])
+    user_text = typed_text or str(analysis["display_text"])
     conversation_message = str(analysis["conversation_message"]).strip() or user_text
+    history_message = typed_text if typed_text and not strokes else conversation_message
     text_response: str | None = None
     image_url: str | None = None
 
     if action == "clarify":
         text_response = str(analysis["clarification_question"])
-        record_exchange(note_id, conversation_message, text_response)
+        record_exchange(note_id, history_message, text_response)
 
-    if action == "chat":
-        text_response = "".join(process_user_message(note_id, conversation_message)).strip()
-
-    if action == "both":
-        text_response = "".join(
-            process_user_message(
+    elif action == "chat":
+        if requires_deep_thinking:
+            text_response = "".join(
+                process_user_message(note_id, history_message, think=True)
+            ).strip()
+        else:
+            text_response = str(analysis["text_response"]).strip()
+            record_exchange(
                 note_id,
-                conversation_message,
-                system_context=IMAGE_TOOL_CONTEXT,
-                record=False,
+                history_message,
+                text_response,
+                remember=True,
             )
-        ).strip()
+
+    elif action == "both":
+        if requires_deep_thinking:
+            text_response = "".join(
+                process_user_message(
+                    note_id,
+                    history_message,
+                    system_context=IMAGE_TOOL_CONTEXT,
+                    record=False,
+                    think=True,
+                )
+            ).strip()
+        else:
+            text_response = str(analysis["text_response"]).strip()
 
     if action in {"image", "both"}:
         if image_generation_enabled():
+            unload_qwen_model()
             recognized_text = list(analysis["recognized_text"])
             image_url = generate_canvas_image(
                 str(analysis["image_prompt"]),
@@ -63,11 +93,17 @@ def process_canvas_submission(
             action = "clarify"
 
     if action in {"image", "both"} and image_url and text_response:
-        record_exchange(note_id, conversation_message, text_response)
+        record_exchange(
+            note_id,
+            history_message,
+            text_response,
+            remember=True,
+        )
 
     return {
         "intent": action,
         "confidence": analysis["confidence"],
+        "deep_thinking": requires_deep_thinking,
         "user_text": user_text,
         "text_response": text_response,
         "image_url": image_url,

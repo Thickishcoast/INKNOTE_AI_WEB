@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Niconne&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/styles.css?v=42">
+  <link rel="stylesheet" href="/static/css/styles.css?v=43">
 </head>
 <body>
   <div class="app-shell">
@@ -143,13 +143,33 @@
                   <button id="sendCanvasButton" class="primary-button compact-action send-canvas-button" type="button">Send</button>
                 </div>
 
+                <label class="keyboard-prompt">
+                  <span class="visually-hidden">Type a prompt for the user canvas</span>
+                  <textarea
+                    id="keyboardCanvasInput"
+                    rows="2"
+                    maxlength="8000"
+                    placeholder="Type a prompt, or draw below…"
+                    aria-describedby="canvasKeyboardHint"
+                  ></textarea>
+                </label>
+
                 <p id="canvasHint" class="paper-hint split-canvas-hint">
                   Ask a question, draw a sketch, or combine both. Qwen routes the request automatically.
+                </p>
+                <p id="canvasKeyboardHint" class="keyboard-hint">
+                  Ctrl/⌘+Enter send · P pen · E eraser · Ctrl/⌘+Z undo
                 </p>
 
                 <div class="user-canvas-scroll" aria-label="Scrollable extended notebook page">
                   <div id="handwritingCanvasWrap" class="canvas-wrap notebook-ink-surface">
-                    <canvas id="handwritingCanvas" data-active-tool="pen" aria-label="Write or draw here"></canvas>
+                    <canvas
+                      id="handwritingCanvas"
+                      data-active-tool="pen"
+                      tabindex="0"
+                      aria-label="Drawing canvas. Use P for pen or E for eraser."
+                      aria-describedby="canvasKeyboardHint"
+                    ></canvas>
                     <div class="canvas-placeholder notebook-placeholder">Write, sketch, label, or diagram here</div>
                   </div>
                 </div>
@@ -177,13 +197,26 @@
             </div>
           </section>
 
-          <aside class="conversation-dock" aria-label="Conversation history">
+          <aside id="referenceConversation" class="conversation-dock" aria-label="Conversation history">
             <div class="conversation-dock-header">
               <div>
                 <span class="eyebrow">Reference</span>
                 <h2>Conversation</h2>
               </div>
-              <span class="conversation-live-dot" title="Conversation is saved"></span>
+              <div class="conversation-dock-actions">
+                <span class="conversation-live-dot" title="Conversation is saved"></span>
+                <button
+                  id="collapseConversationButton"
+                  class="conversation-collapse-button"
+                  type="button"
+                  aria-expanded="true"
+                  aria-controls="conversationLog"
+                  title="Collapse reference conversation"
+                >
+                  <span id="collapseConversationIcon" aria-hidden="true">›</span>
+                  <span class="visually-hidden">Collapse reference conversation</span>
+                </button>
+              </div>
             </div>
             <div id="conversationLog" class="conversation-log" aria-live="polite">
               <p class="conversation-empty">Canvas requests and AI responses are recorded here.</p>
@@ -195,6 +228,6 @@
   </div>
 
   <div id="toast" class="toast hidden" role="status"></div>
-  <script src="/static/js/app.js?v=42" defer></script>
+  <script src="/static/js/app.js?v=46" defer></script>
 </body>
 </html>
