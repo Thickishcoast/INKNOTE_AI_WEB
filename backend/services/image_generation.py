@@ -22,7 +22,7 @@ from backend.config import (
     ROUTER_CONFIDENCE_THRESHOLD,
     ROUTER_CONTEXT_SIZE,
 )
-from backend.services.llm import ask_structured_model
+from backend.services.llm import ask_structured_model_async
 
 
 _DATA_URL = re.compile(r"^data:image/[^;]+;base64,(.+)$", re.DOTALL)
@@ -106,7 +106,7 @@ def clean_flux_prompt(
     return prompt
 
 
-def analyze_canvas_page(
+async def analyze_canvas_page(
     page_data_url: str,
     stroke_count: int = 0,
     typed_text: str = "",
@@ -205,7 +205,7 @@ text-free. For clarify, provide one brief clarification_question. Return JSON on
     if page_bytes is not None:
         router_message["images"] = [page_bytes]
 
-    data = ask_structured_model(
+    data = await ask_structured_model_async(
         messages=[router_message],
         schema=schema,
         options={

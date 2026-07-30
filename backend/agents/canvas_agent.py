@@ -21,7 +21,7 @@ describe the requested scene merely as a substitute for generating it. Do not ad
 a generic image-completion acknowledgement.
 """.strip()
 
-def process_canvas_submission(
+async def process_canvas_submission(
     note_id: str,
     page_data_url: str,
     strokes: list[dict[str, Any]],
@@ -31,7 +31,7 @@ def process_canvas_submission(
 ) -> dict[str, Any]:
     typed_text = typed_text.strip()
     conversation_history, relevant_memories = get_reference_context(note_id, typed_text)
-    analysis = analyze_canvas_page(
+    analysis = await analyze_canvas_page(
         page_data_url,
         stroke_count=len(strokes),
         typed_text=typed_text,

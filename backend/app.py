@@ -130,7 +130,7 @@ def notes_delete(note_id: str) -> dict[str, bool]:
 
 @app.post("/api/canvas/submit")
 async def canvas_submit(request: CanvasSubmitRequest) -> dict[str, Any]:
-    return process_canvas_submission(
+    return await process_canvas_submission(
         request.note_id,
         request.page_data_url,
         request.strokes,

@@ -7,45 +7,6 @@ import ollama
 from backend.config import MODEL_CONTEXT_SIZE, QWEN_KEEP_ALIVE, QWEN_MODEL
 
 
-def ask_structured_model(
-    *,
-    messages: list[dict[str, Any]],
-    schema: dict[str, Any],
-    options: dict[str, Any] | None = None,
-    think: bool = True,
-) -> dict[str, Any]:
-    """Request structured JSON and retry once when the final answer is invalid."""
-    required_fields = set(schema.get("required", []))
-    for attempt_think in (think, False):
-        response = ollama.chat(
-            model=QWEN_MODEL,
-            messages=messages,
-            format=schema,
-            stream=False,
-            think=attempt_think,
-            keep_alive=QWEN_KEEP_ALIVE,
-            options=options or {},
-        )
-        content = (response.message.content or "").strip()
-        if not content:
-            continue
-
-        try:
-            data = json.loads(content)
-        except json.JSONDecodeError:
-            continue
-
-        fields = set(getattr(data, "keys", lambda: ())())
-        if required_fields and not required_fields.issubset(fields):
-            continue
-        return data
-
-    raise RuntimeError(
-        "Qwen did not return valid structured JSON. "
-        "The response was empty or malformed, and the fallback retry also failed."
-    )
-
-
 async def ask_structured_model_async(
     *,
     messages: list[dict[str, Any]],
