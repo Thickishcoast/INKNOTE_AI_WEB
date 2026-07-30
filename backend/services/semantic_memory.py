@@ -1,26 +1,8 @@
-import json
-import math
-
 import ollama
 
-from backend.config import EMBEDDING_MODEL, MEMORY_FILE, ROUTER_CONTEXT_SIZE
+from backend.config import EMBEDDING_MODEL, ROUTER_CONTEXT_SIZE
 from backend.services.llm import ask_structured_model_async
-
-
-def load_memories() -> list[dict]:
-    if not MEMORY_FILE.exists():
-        return []
-    return json.loads(MEMORY_FILE.read_text(encoding="utf-8"))
-
-
-def save_memories(memories: list[dict]) -> None:
-    MEMORY_FILE.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = MEMORY_FILE.with_suffix(".tmp")
-    temporary_path.write_text(
-        json.dumps(memories, indent=2, ensure_ascii=False),
-        encoding="utf-8",
-    )
-    temporary_path.replace(MEMORY_FILE)
+from backend.storage.chroma_store import memory_collection, memory_id
 
 
 def create_embedding(text: str) -> list[float]:
@@ -31,26 +13,23 @@ def create_embedding(text: str) -> list[float]:
     )["embeddings"][0]
 
 
-def cosine_similarity(a: list[float], b: list[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b))
-    magnitude_a = math.sqrt(sum(x * x for x in a))
-    magnitude_b = math.sqrt(sum(y * y for y in b))
-    return dot / (magnitude_a * magnitude_b) if magnitude_a and magnitude_b else 0.0
-
-
 def search_memories(query: str, top_k: int = 3, minimum_score: float = 0.35) -> list[str]:
-    memories = load_memories()
-    if not memories:
+    collection = memory_collection()
+    memory_count = collection.count()
+    if memory_count == 0:
         return []
 
     query_embedding = create_embedding(query)
-    scored = [
-        (cosine_similarity(query_embedding, item["embedding"]), item["text"])
-        for item in memories
-        if item.get("embedding_model") == EMBEDDING_MODEL
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=min(top_k, memory_count),
+        include=["documents", "distances"],
+    )
+    return [
+        text
+        for text, distance in zip(results["documents"][0], results["distances"][0])
+        if distance <= 1 - minimum_score
     ]
-    scored.sort(reverse=True)
-    return [text for score, text in scored[:top_k] if score >= minimum_score]
 
 
 async def extract_memories(user_message: str) -> list[str]:
@@ -82,18 +61,15 @@ async def extract_memories(user_message: str) -> list[str]:
 async def save_new_memories(user_message: str) -> None:
     """Extract, embed, and save durable memories without blocking the request."""
     candidates = await extract_memories(user_message)
-    memories = [
-        item
-        for item in load_memories()
-        if item.get("embedding_model") == EMBEDDING_MODEL
-    ]
-    known = {item.get("text", "").lower() for item in memories}
-    new_texts = []
-    for text in candidates:
-        key = text.lower()
-        if key not in known:
-            known.add(key)
-            new_texts.append(text)
+    candidates_by_id = {memory_id(text): text for text in candidates}
+    if not candidates_by_id:
+        return
+
+    collection = memory_collection()
+    candidate_ids = list(candidates_by_id)
+    known_ids = set(collection.get(ids=candidate_ids)["ids"])
+    new_ids = [record_id for record_id in candidate_ids if record_id not in known_ids]
+    new_texts = [candidates_by_id[record_id] for record_id in new_ids]
     if not new_texts:
         return
 
@@ -102,12 +78,9 @@ async def save_new_memories(user_message: str) -> None:
         input=new_texts,
         keep_alive=0,
     )
-    for text, embedding in zip(new_texts, response["embeddings"]):
-        memories.append(
-            {
-                "text": text,
-                "embedding": embedding,
-                "embedding_model": EMBEDDING_MODEL,
-            }
-        )
-    save_memories(memories)
+    collection.upsert(
+        ids=new_ids,
+        embeddings=response["embeddings"],
+        documents=new_texts,
+        metadatas=[{"embedding_model": EMBEDDING_MODEL} for _ in new_texts],
+    )
