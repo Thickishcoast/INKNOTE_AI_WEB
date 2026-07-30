@@ -18,6 +18,8 @@ flowchart LR
     Browser["Browser<br/>user canvas + AI canvas"]
     API["FastAPI<br/>HTTP API"]
     Agent["Canvas agent<br/>request coordination"]
+    Memory["Memory retrieval<br/>embedding + relevance search"]
+    Embed["Qwen embedding model<br/>query vector"]
     Router["Qwen router<br/>vision + structured action"]
     Chat["Qwen chat<br/>optional deep response"]
     Flux["FLUX<br/>image generation"]
@@ -26,8 +28,15 @@ flowchart LR
 
     Browser -->|"canvas submission"| API
     API --> Agent
-    Agent -->|"history + relevant memory"| Chroma
-    Agent --> Router
+    Agent -->|"note ID: load recent history"| Chroma
+    Chroma -->|"recent conversation history"| Agent
+    Agent -->|"current user query"| Memory
+    Memory -->|"embed query"| Embed
+    Embed -->|"query vector"| Memory
+    Memory -->|"cosine similarity query"| Chroma
+    Chroma -->|"top relevant memories"| Memory
+    Memory -->|"relevant memory context"| Agent
+    Agent -->|"prompt + history + relevant memory"| Router
     Router -->|"chat"| Chat
     Router -->|"image"| Flux
     Router -->|"both: text"| Chat
@@ -39,6 +48,11 @@ flowchart LR
     Agent --> API
     API -->|"text and/or image URL"| Browser
 ```
+
+Before routing, the application embeds the current query with the Qwen embedding
+model and asks ChromaDB for the most relevant durable memories. It also loads recent
+conversation history from ChromaDB. Both are added to the context sent to the Qwen
+router; Qwen does not access the database directly.
 
 The router produces one validated structured result containing the action,
 confidence, recognized text, a simple chat response, and an optional FLUX prompt.
@@ -190,9 +204,6 @@ frontend/
   icons/        PWA assets
   index.html
 run_windows.bat Windows development launcher
-requirements-test.txt
-tests/          Non-model unit tests
-.github/        GitHub Actions workflow
 docs/           Architecture, learning, and API guides
 data/           SQLite, ChromaDB, and generated images
 ```
@@ -256,22 +267,17 @@ The Chroma directory is local runtime data and is excluded by `.gitignore`.
 | Background memory extraction fails | The completed response remains available, but that batch is not added to durable memory; the error is logged. | Resolve the Ollama/Chroma issue and submit a later message containing the durable fact. |
 | The browser request fails | The pending response becomes an error and the submitted canvas snapshot is restored. | Correct the server/network issue and resend. |
 
-## Tests
+## Recommended automated tests
 
-The unit suite covers:
+The repository does not currently include an automated test suite. The first
+non-model tests should cover:
 
 - structured routing normalization and clarification rules
-- Chroma memory relevance filtering without a live database or embedding call
+- Chroma memory relevance filtering with model and database calls mocked
 - Pydantic request validation and unsafe conversation IDs
-- malformed/empty structured model output and retry exhaustion
+- malformed or empty structured model output and retry exhaustion
+- FastAPI failure responses when Ollama, FLUX, or persistence is unavailable
 
-It does not start Ollama, load FLUX, download models, or require a GPU.
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-test.txt
-.\.venv\Scripts\python.exe -m pytest -q
-```
-
-GitHub Actions runs the same non-model suite on Python 3.14 for pushes, pull requests,
-and manual dispatches using
-[`.github/workflows/non-model-tests.yml`](.github/workflows/non-model-tests.yml).
+These tests should avoid starting Ollama, loading FLUX, downloading model weights, or
+requiring a GPU. A future GitHub Actions workflow should run them on Python 3.14 for
+pushes and pull requests.
