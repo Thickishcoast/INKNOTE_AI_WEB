@@ -1,7 +1,7 @@
 # InkNote AI — Unified Agent Notebook
 
 InkNote provides a shared user canvas and AI canvas. A user can write, sketch,
-label a diagram, or combine all three, then submit the page with one **Send**
+label a diagram, or combine all three, then submit the page with one **Click**
 button.
 
 Qwen3.5 routes each canvas submission to one of four internal actions:
@@ -127,16 +127,6 @@ It does not install, check, or download models.
 - **Dependency problem:** run
   `.\.venv\Scripts\python.exe -m pip check`.
 
-## Model sequence
-
-Qwen remains warm for five minutes by default so consecutive chat requests avoid
-model reload time. Before an image action, InkNote explicitly unloads Qwen and then
-loads FLUX. FLUX is released after generation by default, preventing the two models
-from competing for GPU memory.
-
-This simplified school-project version does not use Python threads or locks. Run one
-AI canvas request at a time. Semantic-memory work is added to one `asyncio.Queue`;
-the browser receives its response before the async worker extracts and saves memories.
 
 ## Canvas tools
 
